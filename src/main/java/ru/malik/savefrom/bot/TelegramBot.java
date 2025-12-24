@@ -61,7 +61,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void processRequest(Message message, String url) {
-        downloadManager.download(url);
         MediaContent content = null;
         try {
             content = downloadManager.download(url);

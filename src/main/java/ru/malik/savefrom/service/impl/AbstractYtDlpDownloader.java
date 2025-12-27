@@ -26,6 +26,8 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             List<String> command = new ArrayList<>();
             command.add("yt-dlp");
             command.add("--no-playlist");
+            command.add("--merge-output-format");
+            command.add("mp4");
             command.add("-S");
             command.add("res,ext:mp4:m4a");
             command.add("--no-check-certificate");

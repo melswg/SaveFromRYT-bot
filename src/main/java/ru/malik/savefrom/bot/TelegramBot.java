@@ -15,6 +15,8 @@ import ru.malik.savefrom.util.FileCleaner;
 import ru.malik.savefrom.util.LinkParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.telegram.telegrambots.bots.DefaultBotOptions;
+import org.telegram.telegrambots.meta.api.methods.updates.SetWebhook;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -34,6 +36,11 @@ public class TelegramBot extends TelegramLongPollingBot {
         this.downloadManager = new DownloadManager();
     }
 
+    public TelegramBot(DefaultBotOptions options) {
+        super(options);
+        this.downloadManager = new DownloadManager();
+    }
+
     public String getBotToken(){
         return System.getenv("BOT_TOKEN");
     }
@@ -45,7 +52,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        LinkParser lp = new LinkParser();
         if (update.hasMessage() && update.getMessage().hasText()){
             String message = update.getMessage().getText();
             String url = LinkParser.extractUrl(message);

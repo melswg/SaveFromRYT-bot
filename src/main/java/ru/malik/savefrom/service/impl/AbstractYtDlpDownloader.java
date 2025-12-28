@@ -45,14 +45,15 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             if (exitCode == 0){ //  && Files.exists(fullPath) в условия
                 List<File> downloadFiles = Files.list(requestDir)
                         .map(Path::toFile)
+                        .filter(f -> isSupportedFile(f.getName()))
                         .sorted()
                         .toList();
                 if (downloadFiles.isEmpty()){
                     throw new RuntimeException("No files found after download");
                 }
 
-                boolean isVideo = downloadFiles.get(0).getName().endsWith(".mp4")
-                        || downloadFiles.get(0).getName().endsWith(".webm");
+                boolean isVideo = downloadFiles.stream()
+                        .anyMatch(f -> f.getName().endsWith(".mp4") || f.getName().endsWith(".webm"));
 
                 return new MediaContent(downloadFiles, isVideo);
             } else {
@@ -62,6 +63,12 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
         }catch (IOException | InterruptedException e){
             throw new RuntimeException("Download failed", e);
         }
+    }
+
+    private boolean isSupportedFile(String name) {
+        String lower = name.toLowerCase();
+        return lower.endsWith(".mp4") || lower.endsWith(".webm") || // Видео
+                lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".webp");
     }
 
     protected List<String> getExtraArgs(){

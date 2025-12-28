@@ -1,30 +1,29 @@
 package ru.malik.savefrom.bot;
 
-import org.glassfish.grizzly.utils.EchoFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
+import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.media.InputMedia;
+import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.DownloadManager;
 import ru.malik.savefrom.util.FileCleaner;
 import ru.malik.savefrom.util.LinkParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.telegram.telegrambots.bots.DefaultBotOptions;
-import org.telegram.telegrambots.meta.api.methods.updates.SetWebhook;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Stream;
 
 public class TelegramBot extends TelegramLongPollingBot {
 
@@ -71,29 +70,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             content = downloadManager.download(url);
 
-            if (content != null && content.isVideo()) {
-                File videoFile = content.getFiles().get(0);
-
-                SendVideo sendVideo = new SendVideo();
-                sendVideo.setChatId(message.getChatId().toString());
-                sendVideo.setVideo(new InputFile(videoFile));
-
-                sendVideo.setParseMode(ParseMode.HTML);
-
-                String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
-
-                String caption = String.format("Ссылка от @%s\n\n<a href=\"%s\">Адрес ссылки</a>",
-                        safeUserName, url);
-
-                sendVideo.setCaption(caption);
-
-                execute(sendVideo);
-                log.info("Видео успешно отправлено в чат {}", message.getChatId());
-
-                deleteMessage(message);
-            } else {
-                log.warn("Контент не найден или не поддерживается: {}", url);
+            if (content == null || content.getFiles().isEmpty()){
+                log.warn("Контент не найден: {}" + url);
+                return;
             }
+
+            if (content.isVideo()){
+                sendVideoContent(message, content.getFiles().get(0), url);
+            } else {
+                sendAlbumContent(message, content.getFiles(), url);
+            }
+
+            deleteMessage(message);
+
         } catch (Exception e) {
             log.error("Ошибка при обработке запроса: ", e);
         } finally {
@@ -116,4 +105,46 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    private void sendVideoContent(Message message, File videoFile, String url) throws TelegramApiException {
+        SendVideo sendVideo = new SendVideo();
+        sendVideo.setChatId(message.getChatId().toString());
+        sendVideo.setVideo(new InputFile(videoFile));
+
+        sendVideo.setParseMode(ParseMode.HTML);
+
+        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
+        String caption = String.format("Видео от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+
+        sendVideo.setCaption(caption);
+
+        execute(sendVideo);
+        log.info("Видео отправлено в чат {}", message.getChatId());
+    }
+
+    private void sendAlbumContent(Message message, List<File> files, String url) throws TelegramApiException {
+        List<InputMedia> mediaGroup = new ArrayList<>();
+
+        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
+        String caption = String.format("Фото от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+
+        for (int i = 0; i < files.size(); i++){
+            File file = files.get(i);
+            InputMediaPhoto photo = new InputMediaPhoto();
+            photo.setMedia(file, "photo_" + i);
+
+            if (i == 0) {
+                photo.setCaption(caption);
+                photo.setParseMode(ParseMode.HTML);
+            }
+
+            mediaGroup.add(photo);
+        }
+
+        SendMediaGroup sendMediaGroup = new SendMediaGroup();
+        sendMediaGroup.setChatId(message.getChatId().toString());
+        sendMediaGroup.setMedias(mediaGroup);
+
+        execute(sendMediaGroup);
+        log.info("Альбом из {} фото отправлен в чат {}", files.size(), message.getChatId());
+    }
 }

@@ -11,9 +11,10 @@ public class DownloadManager {
 
     public DownloadManager(){
         this.downloaders = new ArrayList<>();
-        this.downloaders.add(new TikTokDownloader());
+
+        this.downloaders.add(new CobaltDownloader());
+
         this.downloaders.add(new YouTubeShortsDownloader());
-        this.downloaders.add(new InstagramDownloader());
         this.downloaders.add(new TwitchDownloader());
         this.downloaders.add(new RuTubeDownloader());
     }

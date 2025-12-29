@@ -6,6 +6,7 @@ import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -13,6 +14,7 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
+import org.telegram.telegrambots.meta.api.objects.media.InputMediaVideo;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.DownloadManager;
@@ -70,15 +72,22 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             content = downloadManager.download(url);
 
-            if (content == null || content.getFiles().isEmpty()){
-                log.warn("Контент не найден: {}" + url);
+            if (content == null || content.getFiles().isEmpty()) {
+                log.warn("Контент не найден или пуст: {}", url);
                 return;
             }
 
-            if (content.isVideo()){
-                sendVideoContent(message, content.getFiles().get(0), url);
+            List<File> files = content.getFiles();
+
+            if (files.size() == 1) {
+                File file = files.get(0);
+                if (file.getName().endsWith(".mp4")) {
+                    sendVideoContent(message, file, url);
+                } else {
+                    sendPhotoContent(message, file, url);
+                }
             } else {
-                sendAlbumContent(message, content.getFiles(), url);
+                sendAlbumContent(message, files, url);
             }
 
             deleteMessage(message);
@@ -86,9 +95,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.error("Ошибка при обработке запроса: ", e);
         } finally {
-            if (content != null && !content.getFiles().isEmpty()){
+            if (content != null && !content.getFiles().isEmpty()) {
                 FileCleaner.cleanup(content.getFiles().get(0).getParentFile());
-
             }
         }
     }
@@ -121,23 +129,47 @@ public class TelegramBot extends TelegramLongPollingBot {
         log.info("Видео отправлено в чат {}", message.getChatId());
     }
 
+    private void sendPhotoContent(Message message, File photoFile, String url) throws TelegramApiException {
+        SendPhoto sendPhoto = new SendPhoto();
+        sendPhoto.setChatId(message.getChatId().toString());
+        sendPhoto.setPhoto(new InputFile(photoFile));
+        sendPhoto.setParseMode(ParseMode.HTML);
+
+        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
+        String caption = String.format("Фото от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+        sendPhoto.setCaption(caption);
+
+        execute(sendPhoto);
+        log.info("Фото отправлено в чат {}", message.getChatId());
+    }
+
     private void sendAlbumContent(Message message, List<File> files, String url) throws TelegramApiException {
         List<InputMedia> mediaGroup = new ArrayList<>();
 
         String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
         String caption = String.format("Фото от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
 
-        for (int i = 0; i < files.size(); i++){
+        for (int i = 0; i < files.size(); i++) {
             File file = files.get(i);
-            InputMediaPhoto photo = new InputMediaPhoto();
-            photo.setMedia(file, "photo_" + i);
+            String fileName = file.getName().toLowerCase();
 
-            if (i == 0) {
-                photo.setCaption(caption);
-                photo.setParseMode(ParseMode.HTML);
+            InputMedia media;
+
+            if (fileName.endsWith(".mp4") || fileName.endsWith(".mov")) {
+                InputMediaVideo video = new InputMediaVideo();
+                video.setMedia(file, file.getName());
+                media = video;
+            } else {
+                InputMediaPhoto photo = new InputMediaPhoto();
+                photo.setMedia(file, file.getName());
+                media = photo;
             }
 
-            mediaGroup.add(photo);
+            if (i == 0) {
+                media.setCaption(caption);
+                media.setParseMode(ParseMode.HTML);
+            }
+            mediaGroup.add(media);
         }
 
         SendMediaGroup sendMediaGroup = new SendMediaGroup();
@@ -145,6 +177,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendMediaGroup.setMedias(mediaGroup);
 
         execute(sendMediaGroup);
-        log.info("Альбом из {} фото отправлен в чат {}", files.size(), message.getChatId());
+        log.info("Альбом из {} файлов отправлен в чат {}", files.size(), message.getChatId());
     }
 }

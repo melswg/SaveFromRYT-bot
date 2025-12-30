@@ -136,7 +136,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendPhoto.setParseMode(ParseMode.HTML);
 
         String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
-        String caption = String.format("Фото от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+        String caption = String.format("Фото от @%s\n<a href=\"%s\">Источник</a>", safeUserName, url);
         sendPhoto.setCaption(caption);
 
         execute(sendPhoto);
@@ -144,39 +144,41 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void sendAlbumContent(Message message, List<File> files, String url) throws TelegramApiException {
-        List<InputMedia> mediaGroup = new ArrayList<>();
+        // Разбиваем список на куски по 10
+        for (int i = 0; i < files.size(); i += 10) {
+            int end = Math.min(i + 10, files.size());
+            List<File> chunk = files.subList(i, end);
 
-        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
-        String caption = String.format("Фото от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+            List<InputMedia> mediaGroup = new ArrayList<>();
+            String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
+            String caption = String.format("Альбом (%d/%d) от @%s\n<a href=\"%s\">Источник</a>",
+                    (i/10)+1, (files.size()-1)/10 + 1, safeUserName, url);
 
-        for (int i = 0; i < files.size(); i++) {
-            File file = files.get(i);
-            String fileName = file.getName().toLowerCase();
+            for (int j = 0; j < chunk.size(); j++) {
+                File file = chunk.get(j);
+                InputMedia media;
+                if (file.getName().endsWith(".mp4")) {
+                    media = new InputMediaVideo();
+                } else {
+                    media = new InputMediaPhoto();
+                }
 
-            InputMedia media;
+                // Исправили имя файла!
+                media.setMedia(file, file.getName());
 
-            if (fileName.endsWith(".mp4") || fileName.endsWith(".mov")) {
-                InputMediaVideo video = new InputMediaVideo();
-                video.setMedia(file, file.getName());
-                media = video;
-            } else {
-                InputMediaPhoto photo = new InputMediaPhoto();
-                photo.setMedia(file, file.getName());
-                media = photo;
+                // Подпись только к первому медиа в ГРУППЕ
+                if (j == 0) {
+                    media.setCaption(caption);
+                    media.setParseMode(ParseMode.HTML);
+                }
+                mediaGroup.add(media);
             }
 
-            if (i == 0) {
-                media.setCaption(caption);
-                media.setParseMode(ParseMode.HTML);
-            }
-            mediaGroup.add(media);
+            SendMediaGroup sendMediaGroup = new SendMediaGroup();
+            sendMediaGroup.setChatId(message.getChatId().toString());
+            sendMediaGroup.setMedias(mediaGroup);
+            execute(sendMediaGroup);
         }
-
-        SendMediaGroup sendMediaGroup = new SendMediaGroup();
-        sendMediaGroup.setChatId(message.getChatId().toString());
-        sendMediaGroup.setMedias(mediaGroup);
-
-        execute(sendMediaGroup);
         log.info("Альбом из {} файлов отправлен в чат {}", files.size(), message.getChatId());
     }
 }

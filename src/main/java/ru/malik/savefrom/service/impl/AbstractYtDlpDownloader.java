@@ -28,10 +28,12 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             command.add("--no-playlist");
 
             command.add("-f");
-            command.add("bestvideo+bestaudio/best");
+            command.add("bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best");
 
             command.add("--merge-output-format");
             command.add("mp4");
+
+            command.add("--embed-metadata");
 
             command.add("--no-check-certificate");
             command.add("-o");

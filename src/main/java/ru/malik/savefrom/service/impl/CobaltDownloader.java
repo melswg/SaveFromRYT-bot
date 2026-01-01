@@ -133,8 +133,6 @@ public class CobaltDownloader implements MediaDownloader {
     // помощник класс для отправки JSON
     private static class RequestBody {
         public String url;
-        public String videoQuality = "max";
-
         public RequestBody(String url) { this.url = url; }
     }
 }

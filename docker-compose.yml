@@ -31,6 +31,8 @@ services:
     environment:
       - API_URL=http://cobalt:9000
       - COOKIE_PATH=/app/cookies.json
+    volumes:
+      - ./cookies.json:/app/cookies.json
     ports:
       - "9000:9000"
 

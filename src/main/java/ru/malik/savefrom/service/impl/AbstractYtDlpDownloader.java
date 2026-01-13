@@ -26,6 +26,8 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             List<String> command = new ArrayList<>();
             command.add("yt-dlp");
             command.add("--no-playlist");
+            command.add("--force-ipv4");
+            command.add("--no-check-certificate");
 
             command.add("-f");
             command.add("bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best");
@@ -33,9 +35,12 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             command.add("--merge-output-format");
             command.add("mp4");
 
-            command.add("--embed-metadata");
+            command.add("--postprocessor-args");
+            command.add("ffmpeg:-movflags +faststart -pix_fmt yuv420p");
 
-            command.add("--no-check-certificate");
+            command.add("--concurrent-fragments");
+            command.add("3");
+
             command.add("-o");
             command.add(outputTemplate);
 

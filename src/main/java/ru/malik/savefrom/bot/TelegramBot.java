@@ -127,6 +127,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void deleteMessage(Message message) {
+        if (message.getChat().isUserChat()) {
+            return;
+        }
+
         DeleteMessage delete = new DeleteMessage();
         delete.setChatId(message.getChatId().toString());
         delete.setMessageId(message.getMessageId());
@@ -137,6 +141,17 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    private String getCaption(Message message, String url, String type) {
+        String sourceLink = String.format("<a href=\"%s\">Источник</a>", url);
+
+        if (message.getChat().isUserChat()) {
+            return String.format("%s | %s", type, sourceLink);
+        }
+
+        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
+        return String.format("%s от @%s\n\n%s", type, safeUserName, sourceLink);
+    }
+
     private void sendVideoContent(Message message, File videoFile, String url) throws TelegramApiException {
         SendVideo sendVideo = new SendVideo();
         sendVideo.setChatId(message.getChatId().toString());
@@ -144,7 +159,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendVideo.setParseMode(ParseMode.HTML);
 
         String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
-        String caption = String.format("Видео от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+        String caption = getCaption(message, url, "Видео");
         sendVideo.setCaption(caption);
 
         execute(sendVideo);
@@ -158,7 +173,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendPhoto.setParseMode(ParseMode.HTML);
 
         String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
-        String caption = String.format("Фото от @%s\n\n<a href=\"%s\">Источник</a>", safeUserName, url);
+        String caption = getCaption(message, url, "Фото");
         sendPhoto.setCaption(caption);
 
         execute(sendPhoto);
@@ -182,8 +197,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 partInfo = String.format(" (Часть %d/%d)", currentPart, totalParts);
             }
 
-            String caption = String.format("Альбом%s от @%s\n\n<a href=\"%s\">Источник</a>",
-                    partInfo, safeUserName, url);
+            String baseCaption = getCaption(message, url, "Альбом" + partInfo);
 
             for (int j = 0; j < chunk.size(); j++) {
                 File file = chunk.get(j);
@@ -197,7 +211,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 media.setMedia(file, file.getName());
 
                 if (j == 0) {
-                    media.setCaption(caption);
+                    media.setCaption(baseCaption);
                     media.setParseMode(ParseMode.HTML);
                 }
                 mediaGroup.add(media);

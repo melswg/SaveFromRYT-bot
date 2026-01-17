@@ -26,7 +26,11 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             List<String> command = new ArrayList<>();
             command.add("yt-dlp");
             command.add("--no-playlist");
-            command.add("--force-ipv4");
+
+            command.add("--socket-timeout");
+            command.add("30");
+            command.add("--proxy");
+            command.add("");
             command.add("--no-check-certificate");
 
             command.add("-f");

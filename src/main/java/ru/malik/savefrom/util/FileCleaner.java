@@ -24,4 +24,37 @@ public class FileCleaner {
         }
     }
 
+    public static File fastFixVideo(File input) {
+        String name = input.getName().toLowerCase();
+        if (!name.endsWith(".mp4") && !name.endsWith(".webm") && !name.endsWith(".mkv")) {
+            return input;
+        }
+
+        try {
+            File output = new File(input.getParent(), "fixed_" + System.currentTimeMillis() + ".mp4");
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "ffmpeg", "-y", "-i", input.getAbsolutePath(),
+                    "-c", "copy",
+                    "-movflags", "+faststart",
+                    "-strict", "unofficial",
+                    output.getAbsolutePath()
+            );
+
+            Process p = pb.start();
+            int exitCode = p.waitFor();
+
+            if (exitCode == 0 && output.exists() && output.length() > 0) {
+                log.info("Видео исправлено (fast fix): {}", output.getName());
+                return output;
+            } else {
+                log.warn("Fast fix не удался, отправляем оригинал.");
+                return input;
+            }
+        } catch (Exception e) {
+            log.error("Ошибка при fast fix: ", e);
+            return input;
+        }
+    }
+
 }

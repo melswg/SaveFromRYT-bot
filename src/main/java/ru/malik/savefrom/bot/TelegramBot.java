@@ -106,12 +106,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (files.size() == 1) {
                 File file = files.get(0);
                 if (file.getName().endsWith(".mp4")) {
-                    sendVideoContent(message, file, url);
+                    sendVideoContent(message, file, url, content.getSource());
                 } else {
                     sendPhotoContent(message, file, url);
                 }
             } else {
-                sendAlbumContent(message, files, url);
+                sendAlbumContent(message, files, url, content.getSource());
             }
 
             deleteMessage(message);
@@ -152,13 +152,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         return String.format("%s от @%s\n\n%s", type, safeUserName, sourceLink);
     }
 
-    private void sendVideoContent(Message message, File videoFile, String url) throws TelegramApiException {
+    private void sendVideoContent(Message message, File videoFile, String url, String source) throws TelegramApiException {
+        File fileToSend = videoFile;
+
+        if ("YTDLP".equals(source)) {
+            fileToSend = FileCleaner.fastFixVideo(videoFile);
+        }
+
         SendVideo sendVideo = new SendVideo();
         sendVideo.setChatId(message.getChatId().toString());
-        sendVideo.setVideo(new InputFile(videoFile));
+        sendVideo.setVideo(new InputFile(fileToSend));
         sendVideo.setParseMode(ParseMode.HTML);
 
-        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
+
         String caption = getCaption(message, url, "Видео");
         sendVideo.setCaption(caption);
 
@@ -180,7 +186,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         log.info("Фото отправлено в чат {}", message.getChatId());
     }
 
-    private void sendAlbumContent(Message message, List<File> files, String url) throws TelegramApiException {
+    private void sendAlbumContent(Message message, List<File> files, String url, String source) throws TelegramApiException {
         boolean isMultipart = files.size() > 10;
         int totalParts = (files.size() + 9) / 10;
 
@@ -204,8 +210,15 @@ public class TelegramBot extends TelegramLongPollingBot {
                 InputMedia media;
                 if (file.getName().endsWith(".mp4")) {
                     media = new InputMediaVideo();
+                    File fileToSend = file;
+                    if ("YTDLP".equals(source)) {
+                        fileToSend = FileCleaner.fastFixVideo(file);
+                    }
+                    media.setMedia(fileToSend, fileToSend.getName());
+
                 } else {
                     media = new InputMediaPhoto();
+                    media.setMedia(file, file.getName());
                 }
 
                 media.setMedia(file, file.getName());

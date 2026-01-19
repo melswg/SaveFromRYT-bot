@@ -27,24 +27,10 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             command.add("yt-dlp");
             command.add("--no-playlist");
 
-            command.add("--socket-timeout");
-            command.add("30");
-            command.add("--proxy");
-            command.add("");
-            command.add("--no-check-certificate");
-
             command.add("-f");
-            command.add("bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best");
+            command.add("bestvideo[vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best");
 
-            command.add("--merge-output-format");
-            command.add("mp4");
-
-            command.add("--postprocessor-args");
-            command.add("ffmpeg:-movflags +faststart -pix_fmt yuv420p");
-
-            command.add("--concurrent-fragments");
-            command.add("3");
-
+            command.add("--no-check-certificate");
             command.add("-o");
             command.add(outputTemplate);
 
@@ -70,7 +56,7 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
                 boolean isVideo = downloadFiles.stream()
                         .anyMatch(f -> f.getName().endsWith(".mp4") || f.getName().endsWith(".webm"));
 
-                return new MediaContent(downloadFiles, isVideo);
+                return new MediaContent(downloadFiles, isVideo, "YTDLP");
             } else {
                 throw new RuntimeException("yt-dlp failed with exit code: " + exitCode);
             }

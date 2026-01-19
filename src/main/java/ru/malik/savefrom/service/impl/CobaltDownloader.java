@@ -100,7 +100,7 @@ public class CobaltDownloader implements MediaDownloader {
                 isVideo = file.getName().endsWith(".mp4");
             }
 
-            return new MediaContent(downloadedFiles, isVideo);
+            return new MediaContent(downloadedFiles, isVideo, "COBALT");
 
         } catch (Exception e) {
             log.error("Ошибка при работе с Cobalt: ", e);

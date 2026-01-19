@@ -9,6 +9,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
+import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -105,8 +106,12 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             if (files.size() == 1) {
                 File file = files.get(0);
-                if (file.getName().endsWith(".mp4")) {
+                String name = file.getName().toLowerCase();
+
+                if (name.endsWith(".mp4") || name.endsWith(".webm")) {
                     sendVideoContent(message, file, url, content.getSource());
+                } else if (name.endsWith(".mp3")) { // <-- НОВАЯ ВЕТКА
+                    sendAudioContent(message, file, url);
                 } else {
                     sendPhotoContent(message, file, url);
                 }
@@ -216,6 +221,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     media.setMedia(fileToSend, fileToSend.getName());
 
+                } else if (file.getName().endsWith(".mp3")) {
+                    sendAudioContent(message, file, url);
+                    continue;
                 } else {
                     media = new InputMediaPhoto();
                     media.setMedia(file, file.getName());
@@ -236,6 +244,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             execute(sendMediaGroup);
         }
         log.info("Альбом из {} файлов отправлен в чат {}", files.size(), message.getChatId());
+    }
+
+    private void sendAudioContent(Message message, File audioFile, String url) throws TelegramApiException {
+        SendAudio sendAudio = new SendAudio();
+        sendAudio.setChatId(message.getChatId().toString());
+        sendAudio.setAudio(new InputFile(audioFile));
+
+        sendAudio.setParseMode(ParseMode.HTML);
+        String caption = getCaption(message, url, "Аудио");
+        sendAudio.setCaption(caption);
+
+        execute(sendAudio);
+        log.info("Аудио отправлено в чат {}", message.getChatId());
     }
 
     private void sendWelcomeMessage(Message message) {

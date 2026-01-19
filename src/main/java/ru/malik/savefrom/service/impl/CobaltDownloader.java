@@ -41,7 +41,15 @@ public class CobaltDownloader implements MediaDownloader {
 
     @Override
     public boolean canHandle(String url) {
-        return url.contains("tiktok.com") || url.contains("instagram.com");
+        return url.contains("tiktok.com") ||
+                url.contains("instagram.com") ||
+                url.contains("pinterest") ||
+                url.contains("pin.it") ||
+                url.contains("vk.ru") ||
+                url.contains("vk.com") ||
+                url.contains("twitter.com") ||
+                url.contains("x.com") ||
+                url.contains("soundcloud.com");
     }
 
 
@@ -114,10 +122,18 @@ public class CobaltDownloader implements MediaDownloader {
         String ext = ".mp4";
 
         if (type != null) {
-            if ("photo".equals(type) || "image".equals(type)) ext = ".jpg";
+            if ("photo".equals(type) || "image".equals(type)) {
+                ext = ".jpg";
+            } else if ("audio".equals(type)) {
+                ext = ".mp3";
+            } else {
+                ext = ".mp4";
+            }
         } else {
             if (fileUrl.contains(".jpg") || fileUrl.contains(".webp") || fileUrl.contains(".png")) {
                 ext = ".jpg";
+            } else if (fileUrl.contains(".mp3") || fileUrl.contains(".wav")) {
+                ext = ".mp3";
             }
         }
 
@@ -130,7 +146,6 @@ public class CobaltDownloader implements MediaDownloader {
         return targetPath.toFile();
     }
 
-    // помощник класс для отправки JSON
     private static class RequestBody {
         public String url;
         public RequestBody(String url) { this.url = url; }

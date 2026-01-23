@@ -95,16 +95,31 @@ public class CobaltDownloader implements MediaDownloader {
             if (cobaltData.getPicker() != null) {
                 int index = 1;
                 for (CobaltResponse.PickerItem item : cobaltData.getPicker()) {
+                    log.info("Cobalt item type: {}, URL: {}", item.getType(), item.getUrl());
                     File file = downloadFile(item.getUrl(), requestDir, index++, item.getType());
                     downloadedFiles.add(file);
+
                     if ("video".equals(item.getType())) isVideo = true;
                 }
             } else {
-                String type = "video";
-                if (url.contains("/photo/") || url.contains("/p/")) type = "photo";
+                String type = null;
 
-                File file = downloadFile(cobaltData.getUrl(), requestDir, 1, null);
+                if (cobaltData.getFilename() != null) {
+                    String fname = cobaltData.getFilename().toLowerCase();
+                    if (fname.endsWith(".jpg") || fname.endsWith(".jpeg") || fname.endsWith(".png") || fname.endsWith(".webp")) {
+                        type = "photo";
+                    } else if (fname.endsWith(".gif")) {
+                        type = "gif";
+                    } else if (fname.endsWith(".mp3") || fname.endsWith(".wav")) {
+                        type = "audio";
+                    }
+                }
+
+                log.info("Single file. Filename: {}, Type detected: {}", cobaltData.getFilename(), type);
+
+                File file = downloadFile(cobaltData.getUrl(), requestDir, 1, type);
                 downloadedFiles.add(file);
+
                 isVideo = file.getName().endsWith(".mp4");
             }
 
@@ -124,16 +139,17 @@ public class CobaltDownloader implements MediaDownloader {
         if (type != null) {
             if ("photo".equals(type) || "image".equals(type)) {
                 ext = ".jpg";
+            } else if ("gif".equals(type)) {
+                ext = ".gif";
             } else if ("audio".equals(type)) {
                 ext = ".mp3";
-            } else {
-                ext = ".mp4";
             }
         } else {
-            if (fileUrl.contains(".jpg") || fileUrl.contains(".webp") || fileUrl.contains(".png")) {
+            String lowerUrl = fileUrl.toLowerCase();
+            if (lowerUrl.contains(".jpg") || lowerUrl.contains(".jpeg") || lowerUrl.contains(".png") || lowerUrl.contains(".webp")) {
                 ext = ".jpg";
-            } else if (fileUrl.contains(".mp3") || fileUrl.contains(".wav")) {
-                ext = ".mp3";
+            } else if (lowerUrl.contains(".gif")) {
+                ext = ".gif";
             }
         }
 

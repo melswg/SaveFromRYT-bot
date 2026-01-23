@@ -5,11 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
-import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
-import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
-import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
+import org.telegram.telegrambots.meta.api.methods.send.*;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -110,8 +106,10 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 if (name.endsWith(".mp4") || name.endsWith(".webm")) {
                     sendVideoContent(message, file, url, content.getSource());
-                } else if (name.endsWith(".mp3")) { // <-- НОВАЯ ВЕТКА
+                } else if (name.endsWith(".mp3")) {
                     sendAudioContent(message, file, url);
+                } else if (file.getName().endsWith(".gif")) {
+                    sendAnimationContent(message, file, url);
                 } else {
                     sendPhotoContent(message, file, url);
                 }
@@ -244,6 +242,15 @@ public class TelegramBot extends TelegramLongPollingBot {
             execute(sendMediaGroup);
         }
         log.info("Альбом из {} файлов отправлен в чат {}", files.size(), message.getChatId());
+    }
+
+    private void sendAnimationContent(Message message, File file, String url) throws TelegramApiException {
+        SendAnimation sendAnimation = new SendAnimation();
+        sendAnimation.setChatId(message.getChatId().toString());
+        sendAnimation.setAnimation(new InputFile(file));
+        sendAnimation.setCaption(getCaption(message, url, "GIF"));
+        sendAnimation.setParseMode(ParseMode.HTML);
+        execute(sendAnimation);
     }
 
     private void sendAudioContent(Message message, File audioFile, String url) throws TelegramApiException {

@@ -171,6 +171,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendVideo.setChatId(message.getChatId().toString());
         sendVideo.setVideo(new InputFile(fileToSend));
 
+        sendVideo.setSupportsStreaming(true);
+
         if (thumbnail != null) {
             sendVideo.setThumb(new InputFile(thumbnail));
         }

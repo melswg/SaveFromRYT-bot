@@ -165,9 +165,16 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         VideoInfoExtractor.VideoMetadata metadata = VideoInfoExtractor.getMetaData(fileToSend);
 
+        File thumbnail = VideoInfoExtractor.extractThumbnail(fileToSend);
+
         SendVideo sendVideo = new SendVideo();
         sendVideo.setChatId(message.getChatId().toString());
         sendVideo.setVideo(new InputFile(fileToSend));
+
+        if (thumbnail != null) {
+            sendVideo.setThumb(new InputFile(thumbnail));
+        }
+
         sendVideo.setParseMode(ParseMode.HTML);
 
         if (metadata != null) {
@@ -180,8 +187,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         String caption = getCaption(message, url, "Видео");
         sendVideo.setCaption(caption);
 
-        execute(sendVideo);
-        log.info("Видео отправлено в чат {}", message.getChatId());
+        try {
+            execute(sendVideo);
+            log.info("Видео отправлено в чат {}", message.getChatId());
+        } finally {
+            if (thumbnail != null && thumbnail.exists()) {
+                thumbnail.delete();
+            }
+        }
     }
 
     private void sendPhotoContent(Message message, File photoFile, String url) throws TelegramApiException {

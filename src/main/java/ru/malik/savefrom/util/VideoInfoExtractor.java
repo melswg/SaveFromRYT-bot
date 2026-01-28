@@ -46,4 +46,31 @@ public class VideoInfoExtractor {
             return null;
         }
     }
+
+    public static File extractThumbnail(File videoFile) {
+        try {
+            File thumbFile = new File(videoFile.getParent(), "thumb_" + System.currentTimeMillis() + ".jpg");
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "ffmpeg",
+                    "-y",
+                    "-i", videoFile.getAbsolutePath(),
+                    "-ss", "00:00:01",
+                    "-vframes", "1",
+                    "-vf", "scale=320:-1",
+                    "-q:v", "2",
+                    thumbFile.getAbsolutePath()
+            );
+
+            Process p = pb.start();
+            int exitCode = p.waitFor();
+
+            if (exitCode == 0 && thumbFile.exists() && thumbFile.length() > 0) {
+                return thumbFile;
+            }
+        } catch (Exception e) {
+            log.error("Не удалось создать превью: ", e);
+        }
+        return null;
+    }
 }

@@ -18,6 +18,7 @@ import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.DownloadManager;
 import ru.malik.savefrom.util.FileCleaner;
 import ru.malik.savefrom.util.LinkParser;
+import ru.malik.savefrom.util.VideoInfoExtractor;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -162,11 +163,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             fileToSend = FileCleaner.fastFixVideo(videoFile);
         }
 
+        VideoInfoExtractor.VideoMetadata metadata = VideoInfoExtractor.getMetaData(fileToSend);
+
         SendVideo sendVideo = new SendVideo();
         sendVideo.setChatId(message.getChatId().toString());
         sendVideo.setVideo(new InputFile(fileToSend));
         sendVideo.setParseMode(ParseMode.HTML);
 
+        if (metadata != null) {
+            if (metadata.width() > 0) sendVideo.setWidth(metadata.width());
+            if (metadata.height() > 0) sendVideo.setHeight(metadata.height());
+            if (metadata.duration() > 0) sendVideo.setDuration(metadata.duration());
+            log.info("Отправка видео с метаданными: {}x{}, {} сек.", metadata.width(), metadata.height(), metadata.duration());
+        }
 
         String caption = getCaption(message, url, "Видео");
         sendVideo.setCaption(caption);

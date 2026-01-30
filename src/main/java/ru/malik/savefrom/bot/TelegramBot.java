@@ -339,10 +339,21 @@ public class TelegramBot extends TelegramLongPollingBot {
                 mediaGroup.add(media);
             }
 
-            SendMediaGroup sendMediaGroup = new SendMediaGroup();
-            sendMediaGroup.setChatId(message.getChatId().toString());
-            sendMediaGroup.setMedias(mediaGroup);
-            execute(sendMediaGroup);
+            if (!mediaGroup.isEmpty()) {
+                SendMediaGroup sendMediaGroup = new SendMediaGroup();
+                sendMediaGroup.setChatId(message.getChatId().toString());
+                sendMediaGroup.setMedias(mediaGroup);
+                execute(sendMediaGroup);
+            }
+
+            if (i + 10 < files.size()) {
+                try {
+                    log.info("Пауза 2 секунды перед отправкой следующей части альбома...");
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
         log.info("Альбом из {} файлов отправлен в чат {}", files.size(), message.getChatId());
     }

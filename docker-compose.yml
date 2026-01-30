@@ -9,9 +9,11 @@ services:
       - COBALT_API_URL=http://cobalt:9000
     volumes:
       - telegram-data:/var/lib/telegram-bot-api
+      - ./cookies.json:/app/cookies.json
     depends_on:
       - telegram-api
       - cobalt
+
 
   telegram-api:
     image: aiogram/telegram-bot-api:latest

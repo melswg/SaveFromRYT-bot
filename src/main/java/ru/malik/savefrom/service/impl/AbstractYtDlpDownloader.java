@@ -25,10 +25,26 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
 
             List<String> command = new ArrayList<>();
             command.add("yt-dlp");
+
+            command.add("--force-ipv4");
+
             command.add("--no-playlist");
 
+            File cookies = new File("/app/cookies.json");
+            if (cookies.exists()) {
+                command.add("--cookies");
+                command.add("/app/cookies.json");
+            }
+
+            command.add("--rm-cache-dir");
+
+            command.add("-N");
+            command.add("5");
             command.add("-f");
             command.add("bestvideo[vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best");
+
+            command.add("--socket-timeout");
+            command.add("30");
 
             command.add("--no-check-certificate");
             command.add("-o");

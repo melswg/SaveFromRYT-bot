@@ -12,7 +12,7 @@ public class VideoInfoExtractor {
 
     public record VideoMetadata(int width, int height, int duration) {}
 
-    public static VideoMetadata getMetaData(File videoFile) {
+    public static VideoMetadata getMetadata(File videoFile) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     "ffprobe",

@@ -33,8 +33,52 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     private static final Logger log = LoggerFactory.getLogger(TelegramBot.class);
     private final DownloadManager downloadManager;
-
     private final Set<String> processingMessages = ConcurrentHashMap.newKeySet();
+
+
+    private static final String LOADING_TEXT = "⏳";
+    private static final String ERROR_TEXT = """
+            **Не удалось получить контент** 😔
+            
+            Возможные причины:
+            • Ограниченный доступ (приватный профиль/видео).
+            • Возрастные или региональные ограничения.
+            • Ошибка при получении данных.
+            
+            Попробуй еще раз через минуту.
+            """;
+
+    private static final String WELCOME_TEXT = """
+            Привет! Я SaveFromRYT Bot - твой карманный помощник для скачивания видео. 🤖
+            
+            Я помогу тебе сохранить контент из различных социальных сетей без лишних хлопот.
+            
+            Как пользоваться? Просто отправь мне ссылку на видео, а я пришлю тебе файл.
+            
+            Поддерживаемые платформы:
+            TikTok
+            Instagram
+            YouTube
+            RuTube
+            Twitch
+            И не только, список постоянно пополняется!
+            
+            Попробуй прямо сейчас! Просто отправь мне ссылку.
+            """;
+
+    private static final String INFO_TEXT = """
+            Информация 🛠
+            
+            Как скачивать: Скопируй ссылку из приложения (TikTok/YT/Insta/...) и вставь её в чат со мной.
+            
+            Если не работает: Убедись, что профиль автора видео открыт (приватные видео я скачать не смогу).
+            
+            Формат: Я стараюсь присылать видео в максимально возможном качестве.
+            
+            👨‍💻 Разработчик: @itAlm0stWorked, github.com/melswg
+            
+            Если бот столкнулся с ошибкой, попробуй отправить ссылку еще раз через минуту.
+            """;
 
     public TelegramBot() {
         this.downloadManager = new DownloadManager();
@@ -62,19 +106,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             String text = message.getText();
 
             if (text.equals("/start")) {
-                sendWelcomeMessage(message);
+                sendTextMessage(message.getChatId(), WELCOME_TEXT);
                 return;
             }
 
             if (text.equals("/info")){
-                sendInfoMessage(message);
+                sendTextMessage(message.getChatId(), INFO_TEXT);
                 return;
             }
 
             String url = LinkParser.extractUrl(text);
 
             if (url != null) {
-                String uniqueId = message.getChatId() + "_" + message.getMessageId(); //Уникальный ID задачи
+                String uniqueId = message.getChatId() + "_" + message.getMessageId();
 
                 if (processingMessages.contains(uniqueId)) {
                     log.info("Дубликат запроса пропущен: {}", uniqueId);
@@ -91,11 +135,16 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void processRequest(Message message, String url, String uniqueId) {
         MediaContent content = null;
+        Message loadingMessage = null;
+
         try {
+            loadingMessage = sendLoadingMessage(message.getChatId());
+
             content = downloadManager.download(url);
 
             if (content == null || content.getFiles().isEmpty()) {
                 log.warn("Контент не найден или пуст: {}", url);
+                sendTextMessage(message.getChatId(), ERROR_TEXT);
                 return;
             }
 
@@ -118,11 +167,14 @@ public class TelegramBot extends TelegramLongPollingBot {
                 sendAlbumContent(message, files, url, content.getSource());
             }
 
-            deleteMessage(message);
+            deleteUserMessage(message);
 
         } catch (Exception e) {
             log.error("Ошибка при обработке запроса: ", e);
+            sendTextMessage(message.getChatId(), ERROR_TEXT);
         } finally {
+            deleteSystemMessage(loadingMessage);
+
             if (content != null && !content.getFiles().isEmpty()) {
                 FileCleaner.cleanup(content.getFiles().get(0).getParentFile());
             }
@@ -130,10 +182,40 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void deleteMessage(Message message) {
+    private void sendTextMessage(Long chatId, String text) {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(chatId.toString());
+        sendMessage.setText(text);
+        sendMessage.setParseMode(ParseMode.MARKDOWN);
+        try {
+            execute(sendMessage);
+        } catch (TelegramApiException e) {
+            log.error("Не удалось отправить текстовое сообщение: ", e);
+        }
+    }
+
+    private Message sendLoadingMessage(Long chatId) {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(chatId.toString());
+        sendMessage.setText(LOADING_TEXT);
+        try {
+            return execute(sendMessage);
+        } catch (TelegramApiException e) {
+            log.error("Не удалось отправить сообщение о загрузке", e);
+            return null;
+        }
+    }
+
+    private void deleteUserMessage(Message message) {
+        if (message == null) return;
         if (message.getChat().isUserChat()) {
             return;
         }
+        deleteSystemMessage(message);
+    }
+
+    private void deleteSystemMessage(Message message) {
+        if (message == null) return;
 
         DeleteMessage delete = new DeleteMessage();
         delete.setChatId(message.getChatId().toString());
@@ -141,7 +223,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             execute(delete);
         } catch (TelegramApiException e) {
-            log.error("Не удалось удалить сообщение: {}", e.getMessage());
+            log.warn("Не удалось удалить сообщение {}: {}", message.getMessageId(), e.getMessage());
         }
     }
 
@@ -163,14 +245,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             fileToSend = FileCleaner.fastFixVideo(videoFile);
         }
 
-        VideoInfoExtractor.VideoMetadata metadata = VideoInfoExtractor.getMetaData(fileToSend);
-
+        VideoInfoExtractor.VideoMetadata metadata = VideoInfoExtractor.getMetadata(fileToSend);
         File thumbnail = VideoInfoExtractor.extractThumbnail(fileToSend);
 
         SendVideo sendVideo = new SendVideo();
         sendVideo.setChatId(message.getChatId().toString());
         sendVideo.setVideo(new InputFile(fileToSend));
-
         sendVideo.setSupportsStreaming(true);
 
         if (thumbnail != null) {
@@ -205,7 +285,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendPhoto.setPhoto(new InputFile(photoFile));
         sendPhoto.setParseMode(ParseMode.HTML);
 
-        String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
         String caption = getCaption(message, url, "Фото");
         sendPhoto.setCaption(caption);
 
@@ -288,63 +367,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         execute(sendAudio);
         log.info("Аудио отправлено в чат {}", message.getChatId());
-    }
-
-    private void sendWelcomeMessage(Message message) {
-        String text = """
-                Привет! Я **SaveFromRYT Bot** - твой карманный помощник для скачивания видео. 🤖
-                
-                Я помогу тебе сохранить контент из различных социальных сетей без лишних хлопот.
-                
-                Как пользоваться? Просто отправь мне ссылку на видео, а я пришлю тебе файл.
-                
-                Поддерживаемые платформы:
-                 TikTok
-                 Instagram
-                 YouTube
-                 RuTube
-                 Twitch
-                
-                Попробуй прямо сейчас! Просто отправь мне ссылку.
-                """;
-
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(message.getChatId().toString());
-        sendMessage.setText(text);
-        sendMessage.setParseMode(ParseMode.MARKDOWN);
-
-        try {
-            execute(sendMessage);
-        } catch (TelegramApiException e) {
-            log.error("Ошибка отправки приветствия: ", e);
-        }
-    }
-
-    private void sendInfoMessage(Message message){
-        String text = """
-                **Информация** 🛠
-                
-                Как скачивать: Скопируй ссылку из приложения (TikTok/YT/Insta/...) и вставь её в чат со мной.
-                
-                Если не работает: Убедись, что профиль автора видео открыт (приватные видео я скачать не смогу).
-                
-                Формат: Я стараюсь присылать видео в максимально возможном качестве.
-                
-                👨‍💻 Разработчик: @itAlm0stWorked (по предложениям и вопросам), github.com/melswg
-                
-                Если бот столкнулся с ошибкой, попробуй отправить ссылку еще раз через минуту.
-                """;
-
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(message.getChatId().toString());
-        sendMessage.setText(text);
-        sendMessage.setParseMode(ParseMode.MARKDOWN);
-
-        try {
-            execute(sendMessage);
-        } catch (TelegramApiException e){
-            log.error("Ошибка при отправке информации: ", e);
-        }
     }
 
 

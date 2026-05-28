@@ -14,6 +14,7 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMedia;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaVideo;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.ContentTooLargeException;
 import ru.malik.savefrom.service.DownloadManager;
@@ -36,6 +37,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final DownloadManager downloadManager;
     private final Set<String> processingMessages = ConcurrentHashMap.newKeySet();
 
+    private static final int ALBUM_SEND_MAX_ATTEMPTS = 3;
+    private static final long ALBUM_SEND_BASE_DELAY_MS = 2000L;
 
     private static final String LOADING_TEXT = "⏳";
     private static final String ERROR_TEXT = """
@@ -342,8 +345,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     media.setMedia(file, file.getName());
                 }
 
-                media.setMedia(file, file.getName());
-
                 if (j == 0) {
                     media.setCaption(baseCaption);
                     media.setParseMode(ParseMode.HTML);
@@ -355,7 +356,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 SendMediaGroup sendMediaGroup = new SendMediaGroup();
                 sendMediaGroup.setChatId(message.getChatId().toString());
                 sendMediaGroup.setMedias(mediaGroup);
-                execute(sendMediaGroup);
+                executeMediaGroupWithRetry(sendMediaGroup);
             }
 
             if (i + 10 < files.size()) {
@@ -368,6 +369,43 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
         log.info("Альбом из {} файлов отправлен в чат {}", files.size(), message.getChatId());
+    }
+
+    private void executeMediaGroupWithRetry(SendMediaGroup sendMediaGroup) throws TelegramApiException {
+        for (int attempt = 1; attempt <= ALBUM_SEND_MAX_ATTEMPTS; attempt++) {
+            try {
+                execute(sendMediaGroup);
+                return;
+            } catch (TelegramApiException e) {
+                if (attempt == ALBUM_SEND_MAX_ATTEMPTS) {
+                    throw e;
+                }
+
+                long delayMs = getAlbumRetryDelayMs(e, attempt);
+                log.warn("Не удалось отправить альбом, попытка {}/{}. Повтор через {} мс: {}",
+                        attempt, ALBUM_SEND_MAX_ATTEMPTS, delayMs, e.getMessage());
+                sleepBeforeAlbumRetry(delayMs);
+            }
+        }
+    }
+
+    private long getAlbumRetryDelayMs(TelegramApiException e, int attempt) {
+        if (e instanceof TelegramApiRequestException requestException
+                && requestException.getParameters() != null
+                && requestException.getParameters().getRetryAfter() != null) {
+            return requestException.getParameters().getRetryAfter() * 1000L + 500L;
+        }
+
+        return ALBUM_SEND_BASE_DELAY_MS * (1L << (attempt - 1));
+    }
+
+    private void sleepBeforeAlbumRetry(long delayMs) throws TelegramApiException {
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new TelegramApiException("Interrupted while waiting to retry media group", e);
+        }
     }
 
     private void sendAnimationContent(Message message, File file, String url) throws TelegramApiException {

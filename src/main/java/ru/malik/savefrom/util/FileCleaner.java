@@ -6,11 +6,13 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.stream.Stream;
 
 public class FileCleaner {
     private static final Logger log = LoggerFactory.getLogger(FileCleaner.class);
+    private static final Duration FFMPEG_TIMEOUT = Timeouts.durationFromEnv("FFMPEG_TIMEOUT_SECONDS", 120);
 
     public static void cleanup(File directory){
 
@@ -40,9 +42,11 @@ public class FileCleaner {
                     "-strict", "unofficial",
                     output.getAbsolutePath()
             );
+            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
 
             Process p = pb.start();
-            int exitCode = p.waitFor();
+            int exitCode = ProcessUtils.waitFor(p, FFMPEG_TIMEOUT, "ffmpeg fast fix");
 
             if (exitCode == 0 && output.exists() && output.length() > 0) {
                 log.info("Видео исправлено (fast fix): {}", output.getName());

@@ -6,12 +6,15 @@ import org.slf4j.LoggerFactory;
 import ru.malik.savefrom.model.CobaltResponse;
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.MediaDownloader;
+import ru.malik.savefrom.util.ProcessUtils;
+import ru.malik.savefrom.util.Timeouts;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLConnection;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -19,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +32,11 @@ public class CobaltDownloader implements MediaDownloader {
     private static final Logger log = LoggerFactory.getLogger(CobaltDownloader.class);
     private static final String DOWNLOAD_DIR = "downloads";// Или /var/lib/telegram-bot-api для Docker
     private static final String DEFAULT_LOCAL_PROCESSING_MODE = "preferred";
+    private static final Duration HTTP_CONNECT_TIMEOUT = Timeouts.durationFromEnv("COBALT_CONNECT_TIMEOUT_SECONDS", 10);
+    private static final Duration HTTP_REQUEST_TIMEOUT = Timeouts.durationFromEnv("COBALT_REQUEST_TIMEOUT_SECONDS", 60);
+    private static final Duration FFMPEG_TIMEOUT = Timeouts.durationFromEnv("FFMPEG_TIMEOUT_SECONDS", 120);
+    private static final int DOWNLOAD_CONNECT_TIMEOUT_MS = (int) Timeouts.durationFromEnv("DOWNLOAD_CONNECT_TIMEOUT_SECONDS", 15).toMillis();
+    private static final int DOWNLOAD_READ_TIMEOUT_MS = (int) Timeouts.durationFromEnv("DOWNLOAD_READ_TIMEOUT_SECONDS", 60).toMillis();
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -35,7 +44,9 @@ public class CobaltDownloader implements MediaDownloader {
     private final String localProcessingMode;
 
     public CobaltDownloader() {
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(HTTP_CONNECT_TIMEOUT)
+                .build();
         this.objectMapper = new ObjectMapper();
         String envUrl = System.getenv("COBALT_API_URL");
         this.cobaltApiUrl = (envUrl != null ? envUrl : "http://localhost:9000");
@@ -65,6 +76,7 @@ public class CobaltDownloader implements MediaDownloader {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(cobaltApiUrl))
+                    .timeout(HTTP_REQUEST_TIMEOUT)
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
@@ -164,7 +176,7 @@ public class CobaltDownloader implements MediaDownloader {
         pb.redirectError(ProcessBuilder.Redirect.DISCARD);
 
         Process process = pb.start();
-        int exitCode = process.waitFor();
+        int exitCode = ProcessUtils.waitFor(process, FFMPEG_TIMEOUT, "ffmpeg local processing");
 
         if (exitCode != 0 || !Files.exists(targetPath) || Files.size(targetPath) == 0) {
             throw new IOException("ffmpeg local processing failed with exit code: " + exitCode);
@@ -258,7 +270,11 @@ public class CobaltDownloader implements MediaDownloader {
         String fileName = String.format("%05d%s", index, ext);
         Path targetPath = dir.resolve(fileName);
 
-        try (InputStream in = new URL(fileUrl).openStream()) {
+        URLConnection connection = new URL(fileUrl).openConnection();
+        connection.setConnectTimeout(DOWNLOAD_CONNECT_TIMEOUT_MS);
+        connection.setReadTimeout(DOWNLOAD_READ_TIMEOUT_MS);
+
+        try (InputStream in = connection.getInputStream()) {
             Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
         }
         return targetPath.toFile();

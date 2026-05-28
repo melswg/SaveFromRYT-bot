@@ -13,6 +13,13 @@ services:
       - YOUTUBE_MAX_VIDEO_DURATION_SECONDS=600
       - YOUTUBE_MAX_VIDEO_SIZE=49M
       - YOUTUBE_MAX_AUDIO_SIZE=49M
+      - YT_DLP_TIMEOUT_SECONDS=300
+      - FFMPEG_TIMEOUT_SECONDS=120
+      - FFPROBE_TIMEOUT_SECONDS=30
+      - COBALT_CONNECT_TIMEOUT_SECONDS=10
+      - COBALT_REQUEST_TIMEOUT_SECONDS=60
+      - DOWNLOAD_CONNECT_TIMEOUT_SECONDS=15
+      - DOWNLOAD_READ_TIMEOUT_SECONDS=60
     volumes:
       - telegram-data:/var/lib/telegram-bot-api
       - ./yt-dlp-cookies.txt:/app/yt-dlp-cookies.txt:ro

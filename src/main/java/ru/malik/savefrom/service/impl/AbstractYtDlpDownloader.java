@@ -2,6 +2,8 @@ package ru.malik.savefrom.service.impl;
 
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.MediaDownloader;
+import ru.malik.savefrom.util.ProcessUtils;
+import ru.malik.savefrom.util.Timeouts;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -11,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -19,6 +22,7 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
     private static final String DOWNLOAD_DIR = "downloads";
     private static final String DEFAULT_COOKIES_PATH = "/app/yt-dlp-cookies.txt";
     private static final int MAX_PROCESS_OUTPUT_CHARS = 8000;
+    private static final Duration YT_DLP_TIMEOUT = Timeouts.durationFromEnv("YT_DLP_TIMEOUT_SECONDS", 300);
 
     public MediaContent download(String url){
         return downloadWithExtraArgs(url, getExtraArgs(), "YTDLP");
@@ -72,8 +76,12 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             outputReader.setDaemon(true);
             outputReader.start();
 
-            int exitCode = process.waitFor();
-            outputReader.join(1000);
+            int exitCode;
+            try {
+                exitCode = ProcessUtils.waitFor(process, YT_DLP_TIMEOUT, "yt-dlp");
+            } finally {
+                outputReader.join(1000);
+            }
 
             if (exitCode == 0){ //  && Files.exists(fullPath) в условия
                 List<File> downloadFiles = Files.list(requestDir)

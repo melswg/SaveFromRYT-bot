@@ -27,16 +27,19 @@ public class CobaltDownloader implements MediaDownloader {
 
     private static final Logger log = LoggerFactory.getLogger(CobaltDownloader.class);
     private static final String DOWNLOAD_DIR = "downloads";// Или /var/lib/telegram-bot-api для Docker
+    private static final String DEFAULT_LOCAL_PROCESSING_MODE = "preferred";
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String cobaltApiUrl;
+    private final String localProcessingMode;
 
     public CobaltDownloader() {
         this.httpClient = HttpClient.newHttpClient();
         this.objectMapper = new ObjectMapper();
         String envUrl = System.getenv("COBALT_API_URL");
         this.cobaltApiUrl = (envUrl != null ? envUrl : "http://localhost:9000");
+        this.localProcessingMode = getEnvOrDefault("COBALT_LOCAL_PROCESSING", DEFAULT_LOCAL_PROCESSING_MODE);
     }
 
     @Override
@@ -57,7 +60,7 @@ public class CobaltDownloader implements MediaDownloader {
     public MediaContent download(String url) {
         try {
             // формировка запрос к кобальту
-            RequestBody body = new RequestBody(url);
+            RequestBody body = new RequestBody(url, localProcessingMode);
             String jsonBody = objectMapper.writeValueAsString(body);
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -79,7 +82,8 @@ public class CobaltDownloader implements MediaDownloader {
             CobaltResponse cobaltData = objectMapper.readValue(response.body(), CobaltResponse.class);
 
             String status = cobaltData.getStatus();
-            if (!"stream".equals(status) && !"picker".equals(status) && !"redirect".equals(status) && !"tunnel".equals(status)) {
+            if (!"stream".equals(status) && !"picker".equals(status) && !"redirect".equals(status)
+                    && !"tunnel".equals(status) && !"local-processing".equals(status)) {
                 throw new RuntimeException("Cobalt returned unexpected status: " + status);
             }
 
@@ -92,7 +96,11 @@ public class CobaltDownloader implements MediaDownloader {
             boolean isVideo = false;
 
             // установка файлов
-            if (cobaltData.getPicker() != null) {
+            if ("local-processing".equals(status)) {
+                File file = processLocalMedia(cobaltData, requestDir);
+                downloadedFiles.add(file);
+                isVideo = isVideoFile(file.getName());
+            } else if (cobaltData.getPicker() != null) {
                 int index = 1;
                 for (CobaltResponse.PickerItem item : cobaltData.getPicker()) {
                     log.info("Cobalt item type: {}, URL: {}", item.getType(), item.getUrl());
@@ -132,6 +140,100 @@ public class CobaltDownloader implements MediaDownloader {
     }
 
 
+    private File processLocalMedia(CobaltResponse cobaltData, Path requestDir) throws IOException, InterruptedException {
+        List<String> tunnels = cobaltData.getTunnel();
+        if (tunnels == null || tunnels.isEmpty()) {
+            throw new IOException("Cobalt local-processing response has no tunnel URLs");
+        }
+
+        Path targetPath = requestDir.resolve(getSafeOutputFilename(cobaltData));
+        List<String> command = new ArrayList<>();
+        command.add("ffmpeg");
+        command.add("-y");
+
+        for (String tunnelUrl : tunnels) {
+            command.add("-i");
+            command.add(tunnelUrl);
+        }
+
+        addLocalProcessingArgs(command, cobaltData);
+        command.add(targetPath.toString());
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+        pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+
+        Process process = pb.start();
+        int exitCode = process.waitFor();
+
+        if (exitCode != 0 || !Files.exists(targetPath) || Files.size(targetPath) == 0) {
+            throw new IOException("ffmpeg local processing failed with exit code: " + exitCode);
+        }
+
+        return targetPath.toFile();
+    }
+
+    private void addLocalProcessingArgs(List<String> command, CobaltResponse cobaltData) {
+        String type = cobaltData.getType();
+
+        if ("mute".equals(type)) {
+            command.add("-an");
+            command.add("-c:v");
+            command.add("copy");
+            return;
+        }
+
+        if ("audio".equals(type)) {
+            command.add("-vn");
+            if (cobaltData.getAudio() != null && Boolean.TRUE.equals(cobaltData.getAudio().getCopy())) {
+                command.add("-c:a");
+                command.add("copy");
+            } else if (cobaltData.getAudio() != null && cobaltData.getAudio().getBitrate() != null) {
+                command.add("-b:a");
+                command.add(cobaltData.getAudio().getBitrate() + "k");
+            }
+            return;
+        }
+
+        if ("merge".equals(type) || "remux".equals(type)) {
+            command.add("-c");
+            command.add("copy");
+        }
+    }
+
+    private String getSafeOutputFilename(CobaltResponse cobaltData) {
+        String filename = null;
+
+        if (cobaltData.getOutput() != null) {
+            filename = cobaltData.getOutput().getFilename();
+        }
+
+        if (filename == null || filename.isBlank()) {
+            filename = cobaltData.getFilename();
+        }
+
+        if (filename == null || filename.isBlank()) {
+            filename = "00001" + getExtensionFromType(cobaltData.getType());
+        }
+
+        return Paths.get(filename).getFileName().toString();
+    }
+
+    private String getExtensionFromType(String type) {
+        if ("audio".equals(type)) {
+            return ".mp3";
+        }
+        if ("gif".equals(type)) {
+            return ".gif";
+        }
+        return ".mp4";
+    }
+
+    private boolean isVideoFile(String name) {
+        String lower = name.toLowerCase();
+        return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mkv");
+    }
+
 
     private File downloadFile(String fileUrl, Path dir, int index, String type) throws IOException {
         String ext = ".mp4";
@@ -164,6 +266,19 @@ public class CobaltDownloader implements MediaDownloader {
 
     private static class RequestBody {
         public String url;
-        public RequestBody(String url) { this.url = url; }
+        public String localProcessing;
+
+        public RequestBody(String url, String localProcessing) {
+            this.url = url;
+            this.localProcessing = localProcessing;
+        }
+    }
+
+    private String getEnvOrDefault(String name, String fallback) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value;
     }
 }

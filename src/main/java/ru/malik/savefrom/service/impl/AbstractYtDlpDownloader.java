@@ -14,6 +14,7 @@ import java.util.UUID;
 
 public abstract class AbstractYtDlpDownloader implements MediaDownloader {
     private static final String DOWNLOAD_DIR = "downloads";
+    private static final String DEFAULT_COOKIES_PATH = "/app/yt-dlp-cookies.txt";
 
     public MediaContent download(String url){
         try {
@@ -30,10 +31,11 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
 
             command.add("--no-playlist");
 
-            File cookies = new File("/app/cookies.json");
+            String cookiesPath = getCookiesPath();
+            File cookies = new File(cookiesPath);
             if (cookies.exists()) {
                 command.add("--cookies");
-                command.add("/app/cookies.json");
+                command.add(cookiesPath);
             }
 
             command.add("--rm-cache-dir");
@@ -90,5 +92,13 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
 
     protected List<String> getExtraArgs(){
         return new ArrayList<>();
+    }
+
+    private String getCookiesPath() {
+        String envPath = System.getenv("YT_DLP_COOKIES_PATH");
+        if (envPath == null || envPath.isBlank()) {
+            return DEFAULT_COOKIES_PATH;
+        }
+        return envPath;
     }
 }

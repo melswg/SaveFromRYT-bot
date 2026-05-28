@@ -37,3 +37,10 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Runtime artifacts ###
+downloads/
+dependency-reduced-pom.xml
+cookies*.json
+*.part
+*.ytdl

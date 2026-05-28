@@ -9,6 +9,10 @@ services:
       - COBALT_API_URL=http://cobalt:9000
       - COBALT_LOCAL_PROCESSING=preferred
       - YT_DLP_COOKIES_PATH=/app/yt-dlp-cookies.txt
+      - YOUTUBE_MAX_VIDEO_HEIGHT=720
+      - YOUTUBE_MAX_VIDEO_DURATION_SECONDS=600
+      - YOUTUBE_MAX_VIDEO_SIZE=49M
+      - YOUTUBE_MAX_AUDIO_SIZE=49M
     volumes:
       - telegram-data:/var/lib/telegram-bot-api
       - ./yt-dlp-cookies.txt:/app/yt-dlp-cookies.txt:ro

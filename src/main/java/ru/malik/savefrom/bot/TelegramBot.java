@@ -15,6 +15,7 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaVideo;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.malik.savefrom.model.MediaContent;
+import ru.malik.savefrom.service.ContentTooLargeException;
 import ru.malik.savefrom.service.DownloadManager;
 import ru.malik.savefrom.util.FileCleaner;
 import ru.malik.savefrom.util.LinkParser;
@@ -46,6 +47,14 @@ public class TelegramBot extends TelegramLongPollingBot {
             • Ошибка при получении данных.
             
             Попробуй еще раз через минуту.
+            """;
+
+    private static final String TOO_LARGE_TEXT = """
+            **Видео слишком большое** 😔
+            
+            Я попробовал получить видео в ограниченном формате и, если нужно, аудиоверсию, но файл всё равно не помещается в лимит отправки.
+            
+            Попробуй отправить более короткое видео или другую ссылку.
             """;
 
     private static final String WELCOME_TEXT = """
@@ -156,7 +165,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 if (name.endsWith(".mp4") || name.endsWith(".webm")) {
                     sendVideoContent(message, file, url, content.getSource());
-                } else if (name.endsWith(".mp3")) {
+                } else if (isAudioFile(name)) {
                     sendAudioContent(message, file, url);
                 } else if (file.getName().endsWith(".gif")) {
                     sendAnimationContent(message, file, url);
@@ -169,6 +178,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             deleteUserMessage(message);
 
+        } catch (ContentTooLargeException e) {
+            log.warn("Контент слишком большой для отправки: {}", url, e);
+            sendTextMessage(message.getChatId(), TOO_LARGE_TEXT);
         } catch (Exception e) {
             log.error("Ошибка при обработке запроса: ", e);
             sendTextMessage(message.getChatId(), ERROR_TEXT);
@@ -322,7 +334,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     media.setMedia(fileToSend, fileToSend.getName());
 
-                } else if (file.getName().endsWith(".mp3")) {
+                } else if (isAudioFile(file.getName())) {
                     sendAudioContent(message, file, url);
                     continue;
                 } else {
@@ -380,5 +392,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         log.info("Аудио отправлено в чат {}", message.getChatId());
     }
 
+    private boolean isAudioFile(String name) {
+        String lowerName = name.toLowerCase();
+        return lowerName.endsWith(".mp3")
+                || lowerName.endsWith(".m4a")
+                || lowerName.endsWith(".opus")
+                || lowerName.endsWith(".wav");
+    }
 
 }

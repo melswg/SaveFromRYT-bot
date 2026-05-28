@@ -15,6 +15,7 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaVideo;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiValidationException;
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.ContentTooLargeException;
 import ru.malik.savefrom.service.DownloadManager;
@@ -316,6 +317,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             List<File> chunk = files.subList(i, end);
 
             List<InputMedia> mediaGroup = new ArrayList<>();
+            List<File> mediaGroupFiles = new ArrayList<>();
             String safeUserName = message.getFrom().getUserName() != null ? message.getFrom().getUserName() : "Незнакомец";
 
             String partInfo = "";
@@ -340,6 +342,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                 } else if (isAudioFile(file.getName())) {
                     sendAudioContent(message, file, url);
                     continue;
+                } else if (file.getName().toLowerCase().endsWith(".gif")) {
+                    sendAnimationContent(message, file, url);
+                    continue;
                 } else {
                     media = new InputMediaPhoto();
                     media.setMedia(file, file.getName());
@@ -350,9 +355,12 @@ public class TelegramBot extends TelegramLongPollingBot {
                     media.setParseMode(ParseMode.HTML);
                 }
                 mediaGroup.add(media);
+                mediaGroupFiles.add(file);
             }
 
-            if (!mediaGroup.isEmpty()) {
+            if (mediaGroup.size() == 1) {
+                sendSingleContent(message, mediaGroupFiles.get(0), url, source);
+            } else if (!mediaGroup.isEmpty()) {
                 SendMediaGroup sendMediaGroup = new SendMediaGroup();
                 sendMediaGroup.setChatId(message.getChatId().toString());
                 sendMediaGroup.setMedias(mediaGroup);
@@ -376,6 +384,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             try {
                 execute(sendMediaGroup);
                 return;
+            } catch (TelegramApiValidationException e) {
+                throw e;
             } catch (TelegramApiException e) {
                 if (attempt == ALBUM_SEND_MAX_ATTEMPTS) {
                     throw e;
@@ -386,6 +396,20 @@ public class TelegramBot extends TelegramLongPollingBot {
                         attempt, ALBUM_SEND_MAX_ATTEMPTS, delayMs, e.getMessage());
                 sleepBeforeAlbumRetry(delayMs);
             }
+        }
+    }
+
+    private void sendSingleContent(Message message, File file, String url, String source) throws TelegramApiException {
+        String name = file.getName().toLowerCase();
+
+        if (name.endsWith(".mp4") || name.endsWith(".webm")) {
+            sendVideoContent(message, file, url, source);
+        } else if (isAudioFile(name)) {
+            sendAudioContent(message, file, url);
+        } else if (name.endsWith(".gif")) {
+            sendAnimationContent(message, file, url);
+        } else {
+            sendPhotoContent(message, file, url);
         }
     }
 

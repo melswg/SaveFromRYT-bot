@@ -2,6 +2,7 @@ package ru.malik.savefrom.service.impl;
 
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.MediaDownloader;
+import ru.malik.savefrom.util.FileCleaner;
 import ru.malik.savefrom.util.ProcessUtils;
 import ru.malik.savefrom.util.Timeouts;
 
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 public abstract class AbstractYtDlpDownloader implements MediaDownloader {
     private static final String DOWNLOAD_DIR = "downloads";
@@ -29,9 +31,12 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
     }
 
     protected MediaContent downloadWithExtraArgs(String url, List<String> extraArgs, String source){
+        Path requestDir = null;
+        boolean downloadCompleted = false;
+
         try {
             String requestID = UUID.randomUUID().toString();
-            Path requestDir = Paths.get(DOWNLOAD_DIR, requestID);
+            requestDir = Paths.get(DOWNLOAD_DIR, requestID);
             Files.createDirectories(requestDir);
 
             String outputTemplate = requestDir.resolve("%(autonumber)s.%(ext)s").toString(); // нумеровка !!!
@@ -84,11 +89,15 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             }
 
             if (exitCode == 0){ //  && Files.exists(fullPath) в условия
-                List<File> downloadFiles = Files.list(requestDir)
-                        .map(Path::toFile)
-                        .filter(f -> isSupportedFile(f.getName()))
-                        .sorted()
-                        .toList();
+                List<File> downloadFiles;
+                try (Stream<Path> files = Files.list(requestDir)) {
+                    downloadFiles = files
+                            .map(Path::toFile)
+                            .filter(f -> isSupportedFile(f.getName()))
+                            .sorted()
+                            .toList();
+                }
+
                 if (downloadFiles.isEmpty()){
                     throw new RuntimeException("No files found after download");
                 }
@@ -96,6 +105,7 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
                 boolean isVideo = downloadFiles.stream()
                         .anyMatch(f -> f.getName().endsWith(".mp4") || f.getName().endsWith(".webm"));
 
+                downloadCompleted = true;
                 return new MediaContent(downloadFiles, isVideo, source);
             } else {
                 throw new RuntimeException("yt-dlp failed with exit code: " + exitCode
@@ -107,6 +117,10 @@ public abstract class AbstractYtDlpDownloader implements MediaDownloader {
             throw new RuntimeException("Download interrupted", e);
         } catch (IOException e) {
             throw new RuntimeException("Download failed", e);
+        } finally {
+            if (!downloadCompleted && requestDir != null) {
+                FileCleaner.cleanup(requestDir.toFile());
+            }
         }
     }
 

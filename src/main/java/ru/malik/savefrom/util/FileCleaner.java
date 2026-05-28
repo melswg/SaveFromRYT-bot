@@ -15,11 +15,18 @@ public class FileCleaner {
     private static final Duration FFMPEG_TIMEOUT = Timeouts.durationFromEnv("FFMPEG_TIMEOUT_SECONDS", 120);
 
     public static void cleanup(File directory){
+        if (directory == null || !directory.exists()) {
+            return;
+        }
 
         try (Stream<Path> walk = Files.walk(directory.toPath())){
             walk.sorted(Comparator.reverseOrder())
                     .map(Path::toFile)
-                    .forEach(File::delete);
+                    .forEach(file -> {
+                        if (!file.delete()) {
+                            log.warn("Не удалось удалить временный файл: {}", file.getAbsolutePath());
+                        }
+                    });
             log.info("Временные данные удалены: {}", directory.getName());
         } catch (Exception e){
             log.error("Не удалось очистить файлы {}: {}", directory.getName(), e.getMessage());

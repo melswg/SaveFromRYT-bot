@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import ru.malik.savefrom.model.CobaltResponse;
 import ru.malik.savefrom.model.MediaContent;
 import ru.malik.savefrom.service.MediaDownloader;
+import ru.malik.savefrom.util.FileCleaner;
 import ru.malik.savefrom.util.ProcessUtils;
 import ru.malik.savefrom.util.Timeouts;
 
@@ -69,6 +70,9 @@ public class CobaltDownloader implements MediaDownloader {
 
     @Override
     public MediaContent download(String url) {
+        Path requestDir = null;
+        boolean downloadCompleted = false;
+
         try {
             // формировка запрос к кобальту
             RequestBody body = new RequestBody(url, localProcessingMode);
@@ -101,7 +105,7 @@ public class CobaltDownloader implements MediaDownloader {
 
             // подготовка папки
             String requestId = UUID.randomUUID().toString();
-            Path requestDir = Paths.get(DOWNLOAD_DIR, requestId);
+            requestDir = Paths.get(DOWNLOAD_DIR, requestId);
             Files.createDirectories(requestDir);
 
             List<File> downloadedFiles = new ArrayList<>();
@@ -143,11 +147,16 @@ public class CobaltDownloader implements MediaDownloader {
                 isVideo = file.getName().endsWith(".mp4");
             }
 
+            downloadCompleted = true;
             return new MediaContent(downloadedFiles, isVideo, "COBALT");
 
         } catch (Exception e) {
             log.error("Ошибка при работе с Cobalt: ", e);
             throw new RuntimeException("Cobalt download failed", e);
+        } finally {
+            if (!downloadCompleted && requestDir != null) {
+                FileCleaner.cleanup(requestDir.toFile());
+            }
         }
     }
 
